@@ -37,6 +37,10 @@ var SoftFocusView = {
     let softFocusEvent = event
       .QueryInterface(Ci.nsIAccessibleSoftFocusChangeEvent);
 
+    // Only interested in pivot 0
+    if (softFocusEvent.pivotIndex != 0)
+      return;
+
     if (softFocusEvent.isFocused)
       this.softFocusRing.show(event.accessible);
     else
