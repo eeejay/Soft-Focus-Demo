@@ -34,14 +34,8 @@ var SoftFocusView = {
     if (event.eventType != Ci.nsIAccessibleEvent.EVENT_SOFT_FOCUS_CHANGED)
       return;
 
-    console.log(console.accToString(event.accessibleDocument.parent));
-
     let softFocusEvent = event
       .QueryInterface(Ci.nsIAccessibleSoftFocusChangeEvent);
-
-    console.log("Soft", softFocusEvent.isFocused ? "Focus" : "Blur");
-    console.log(" " + console.accToString(event.accessible));
-    console.log(" " + softFocusEvent.pivotIndex);
 
     if (softFocusEvent.isFocused)
       this.softFocusRing.show(event.accessible);
