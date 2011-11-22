@@ -7,42 +7,11 @@ Cu.import("resource://softfocusdemo/content/Console.js");
 var EXPORTED_SYMBOLS = ["SoftFocusView"];
 
 var SoftFocusView = {
-  borderWidth: 2,
-  borderRadius: 4,
-
   observerService : Cc["@mozilla.org/observer-service;1"]
     .getService(Ci.nsIObserverService),
 
   init: function init(xulDoc) {
-    let document = xulDoc;
-    this.window = xulDoc.defaultView;
-
-    let contentElement = document.getElementById('appcontent');
-
-    this._highlightRect = document.createElementNS(
-      "http://www.w3.org/1999/xhtml", "div");
-    this._highlightRect.style.position = "fixed";
-    this._highlightRect.style.borderStyle = "solid";
-    this._highlightRect.style.pointerEvents = "none";
-    this._highlightRect.style.display = "none";
-    contentElement.appendChild(this._highlightRect);
-
-    // style it
-    this._highlightRect.style.borderColor = "orange";
-    this._highlightRect.style.borderRadius = "4px";
-    this._highlightRect.style.borderWidth = "2px";
-    
-    this._highlightRect.style.boxShadow = "1px 1px 1px #444";
-
-    // Create inset for inner shadow
-    let inset = document.createElementNS(
-      "http://www.w3.org/1999/xhtml", "div");
-    inset.style.width = "100%";
-    inset.style.height = "100%";
-    inset.style.borderRadius = (this.borderRadius/2) + "px";
-    inset.style.boxShadow = "inset 1px 1px 1px #444";
-    this._highlightRect.appendChild(inset);
-
+    this.softFocusRing = new SoftFocusRing(xulDoc);
     this.observerService.addObserver(this, "accessible-event", false);
   },
 
@@ -75,10 +44,44 @@ var SoftFocusView = {
     console.log(" " + softFocusEvent.pivotIndex);
 
     if (softFocusEvent.isFocused)
-      SoftFocusView.highlightSoftFocus(event.accessible);
+      this.softFocusRing.show(event.accessible);
     else
-      SoftFocusView.hide();
-  },
+      this.softFocusRing.hide();
+  }
+};
+
+function SoftFocusRing(document) {
+  let contentElement = document.getElementById('appcontent');
+  this.window = document.defaultView;
+
+  this._highlightRect = document.createElementNS(
+    "http://www.w3.org/1999/xhtml", "div");
+  this._highlightRect.style.position = "fixed";
+  this._highlightRect.style.borderStyle = "solid";
+  this._highlightRect.style.pointerEvents = "none";
+  this._highlightRect.style.display = "none";
+  contentElement.appendChild(this._highlightRect);
+  
+  // style it
+  this._highlightRect.style.borderColor = "orange";
+  this._highlightRect.style.borderRadius = "4px";
+  this._highlightRect.style.borderWidth = "2px";
+  
+  this._highlightRect.style.boxShadow = "1px 1px 1px #444";
+  
+  // Create inset for inner shadow
+  let inset = document.createElementNS(
+    "http://www.w3.org/1999/xhtml", "div");
+  inset.style.width = "100%";
+  inset.style.height = "100%";
+  inset.style.borderRadius = (this.borderRadius/2) + "px";
+  inset.style.boxShadow = "inset 1px 1px 1px #444";
+  this._highlightRect.appendChild(inset);
+}
+
+SoftFocusRing.prototype = {
+  borderWidth: 2,
+  borderRadius: 4,
 
   hide: function hide () {
     this._highlightRect.style.display = "none";
@@ -86,6 +89,7 @@ var SoftFocusView = {
 
   highlight: function _highlight(rect) {
     console.log("highlight");
+
     this._highlightRect.style.display = "none";
     this._highlightRect.style.top = (rect.top - this.borderWidth/2) + "px";
     this._highlightRect.style.left = (rect.left - this.borderWidth/2) + "px";
@@ -96,7 +100,7 @@ var SoftFocusView = {
     this._highlightRect.style.display = "block";
   },
 
-  highlightSoftFocus: function highlightSoftFocus(acc) {
+  show: function show(acc) {
     let accRect = {};
 
     try {
@@ -121,4 +125,4 @@ var SoftFocusView = {
     }
 
   }
-};
+}
