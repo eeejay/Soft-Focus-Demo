@@ -18,8 +18,10 @@ const STATE_BUSY = Ci.nsIAccessibleStates.STATE_BUSY;
 const STATE_CHECKED = Ci.nsIAccessibleStates.STATE_CHECKED;
 
 var Preferences = {
-  keyCodesNext: [39, 40],
-  keyCodesPrevious: [37, 38],
+  keyCodesNextObject: [40],
+  keyCodesPreviousObject: [38],
+  keyCodesNextWord: [39],
+  keyCodesPreviousWord: [37]
 };
 
 var SoftFocusController = {
@@ -67,26 +69,81 @@ var SoftFocusController = {
 
     let direction = 0;
 
-    if ((Preferences.keyCodesNext || []).indexOf(key) != -1)
-      direction = SoftFocusController.FORWARD;
-
-    if ((Preferences.keyCodesPrevious || []).indexOf(key) != -1)
-      direction = SoftFocusController.BACKWARD;
-
-    if (!direction)
-      return;
-
-    SoftFocusController.navigate(getAccessible(this.document), direction);
+    if ((Preferences.keyCodesNextObject || []).indexOf(key) != -1)
+      SoftFocusController.nextObject(this.document);
+    else if ((Preferences.keyCodesPreviousObject || []).indexOf(key) != -1)
+      SoftFocusController.previousObject(this.document);
+    else if ((Preferences.keyCodesNextWord || []).indexOf(key) != -1)
+      SoftFocusController.nextText(this.document);
+    else if ((Preferences.keyCodesPreviousWord || []).indexOf(key) != -1)
+      SoftFocusController.previousText(this.document);
       
     event.preventDefault();
     event.stopPropagation();
   },
   
+  nextObject: function nextObject (document) {
+    this.navigate(getAccessible(document), this.FORWARD);
+  },
+
+  previousObject: function nextObject (document) {
+    this.navigate(getAccessible(document), this.BACKWARD);
+  },
+
+  nextText: function nextText (document) {
+    this.navigateText(getAccessible(document), this.FORWARD);
+  },
+
+  previousText: function nextText (document) {
+    this.navigateText(getAccessible(document), this.BACKWARD);
+  },
+
+  navigateText: function navigateText (rootAcc, direction) {
+    var docAcc = rootAcc.QueryInterface(Ci.nsIAccessibleDocument);
+    if (docAcc.softFocusPivotCount == 0)
+      return;
+    let currentNode = docAcc.getSoftFocusAtPivot(0);
+
+    let textIface = null;
+
+    try {
+      textIface = currentNode.QueryInterface(Ci.nsIAccessibleText);
+    } catch (e) {
+      try {
+        textIface = currentNode.parent.QueryInterface(Ci.nsIAccessibleText);
+        currentNode.parent.takeSoftFocus(0);
+      } catch (e) {
+        console.log("No interface");
+        return;
+      }
+    }
+
+    let startOffset = {};
+    let endOffset = {};
+    
+    if (textIface.getSoftSelection(startOffset, endOffset)) {
+      if (direction == this.FORWARD &&
+          endOffset.value <= textIface.characterCount)
+        textIface.setSoftSelection(startOffset.value + 1, endOffset.value + 1);
+      else if (direction == this.BACKWARD && startOffset.value > 0)
+        textIface.setSoftSelection(startOffset.value - 1, endOffset.value - 1);
+    } else {
+      textIface.setSoftSelection(0, 1);
+    }
+  },
+
   navigate: function navigate (rootAcc, direction) {
     let treeWalker = new AccessibleTreeWalker(rootAcc, SimpleFilter);
     var docAcc = rootAcc.QueryInterface(Ci.nsIAccessibleDocument);
-    if (docAcc.softFocusPivotCount > 0)
+    if (docAcc.softFocusPivotCount > 0) {
       treeWalker.currentNode = docAcc.getSoftFocusAtPivot(0);
+      try {
+        let textIface =
+          treeWalker.currentNode.QueryInterface(Ci.nsIAccessibleText);
+        textIface.clearSoftSelection();
+      } catch (e) {
+      }
+    }
 
     let newNode = (direction == this.FORWARD) ? treeWalker.next() :
       treeWalker.previous();

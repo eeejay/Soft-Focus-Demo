@@ -31,20 +31,21 @@ var SoftFocusView = {
   },
 
   handleEvent: function handleEvent(event) {
-    if (event.eventType != Ci.nsIAccessibleEvent.EVENT_SOFT_FOCUS_CHANGED)
-      return;
-
-    let softFocusEvent = event
-      .QueryInterface(Ci.nsIAccessibleSoftFocusChangeEvent);
-
-    // Only interested in pivot 0
-    if (softFocusEvent.pivotIndex != 0)
-      return;
-
-    if (softFocusEvent.isFocused)
+    if (event.eventType == Ci.nsIAccessibleEvent.EVENT_SOFT_FOCUS_CHANGED) {
+      let softFocusEvent = event
+        .QueryInterface(Ci.nsIAccessibleSoftFocusChangeEvent);
+      
+      // Only interested in pivot 0
+      if (softFocusEvent.pivotIndex != 0)
+        return;
+      
+      if (softFocusEvent.isFocused)
+        this.softFocusRing.show(event.accessible);
+      else
+        this.softFocusRing.hide();
+    } else if (event.eventType == Ci.nsIAccessibleEvent.EVENT_SOFT_TEXT_SELECTION_CHANGED) {
       this.softFocusRing.show(event.accessible);
-    else
-      this.softFocusRing.hide();
+    }
   }
 };
 
@@ -98,6 +99,29 @@ SoftFocusRing.prototype = {
     this._highlightRect.style.display = "block";
   },
 
+  _getSoftFocusRect: function _getSoftFocusRect(acc) {
+    let ax = {}, ay = {}, aw = {}, ah = {};
+    
+    try {
+      let textAcc = acc.QueryInterface(Ci.nsIAccessibleText);
+      let start = {};
+      let end = {};
+      if (textAcc.getSoftSelection(start, end)) {
+        textAcc.getRangeExtents(
+          start.value, end.value, ax, ay, aw, ah,
+          Ci.nsIAccessibleCoordinateType.COORDTYPE_SCREEN_RELATIVE);
+        return {left: ax.value, top: ay.value,
+                right: ax.value + aw.value, bottom: ay.value + ah.value};
+      }
+    }
+    catch (e) {
+    }
+
+    acc.getBounds(ax, ay, aw, ah);
+    return {left: ax.value, top: ay.value,
+            right: ax.value + aw.value, bottom: ay.value + ah.value};
+  },
+
   show: function show(acc) {
     let accRect = {};
 
@@ -106,15 +130,14 @@ SoftFocusRing.prototype = {
       let accNode = acc.QueryInterface(Ci.nsIAccessNode);
       accNode.scrollTo(Ci.nsIAccessibleScrollType.SCROLL_TYPE_ANYWHERE);
       this.window.setTimeout(function () {
-        let ax = {}, ay = {}, aw = {}, ah = {};
+        let rect = self._getSoftFocusRect(acc);
         let dx = {}, dy = {}, dw = {}, dh = {};
-        acc.getBounds(ax, ay, aw, ah);
         let docRoot = accNode.rootDocument.QueryInterface(Ci.nsIAccessible);
         docRoot.getBounds(dx, dy, dw, dh);
-        accRect = {left: ax.value - dx.value,
-                   top: ay.value - dy.value,
-                   right: ax.value + aw.value - dx.value,
-                   bottom: ay.value + ah.value - dy.value};
+        accRect = {left: rect.left - dx.value,
+                   top: rect.top - dy.value,
+                   right: rect.right - dx.value,
+                   bottom: rect.bottom - dy.value};
         self.highlight(accRect);
       }, 0);
     } catch (e) {
