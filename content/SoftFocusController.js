@@ -34,12 +34,13 @@ var SoftFocusController = {
       window.document.addEventListener("keypress", this._onInputKeyPress, true);
     } else {
       console.log("not attaching to document");
-      /*getDocRoot(window,
-                 function (docRoot) {
-                   console.dumpAccTree(docRoot);
-                 }); */
       window.addEventListener("keypress", this._onInputKeyPressInner, true);
     }
+  },
+
+  getVirtualCursor: function getVirtualCursor(docRoot) {
+    let doc = docRoot.QueryInterface(Ci.nsIAccessibleDocument);
+    return doc.virtualCursor;
   },
 
   uninit: function uninit(window) {
@@ -99,10 +100,9 @@ var SoftFocusController = {
   },
 
   navigateText: function navigateText (rootAcc, direction) {
-    var docAcc = rootAcc.QueryInterface(Ci.nsIAccessibleDocument);
-    if (docAcc.softFocusPivotCount == 0)
-      return;
-    let currentNode = docAcc.getSoftFocusAtPivot(0);
+    let virtualCursor = this.getVirtualCursor(rootAcc);
+
+    let currentNode = virtualCursor.accessible;
 
     let textIface = null;
 
@@ -111,45 +111,43 @@ var SoftFocusController = {
     } catch (e) {
       try {
         textIface = currentNode.parent.QueryInterface(Ci.nsIAccessibleText);
-        currentNode.parent.takeSoftFocus(0);
+        virtualCursor.setAccessible(currentNode.parent);
       } catch (e) {
         console.log("No interface");
         return;
       }
     }
 
-    let startOffset = {};
-    let endOffset = {};
+    if (virtualCursor.endOffset == -1 && virtualCursor.startOffset == -1)
+      virtualCursor.setTextOffset(0, 1);
+    else if (direction == this.FORWARD &&
+        virtualCursor.endOffset <= textIface.characterCount)
+      virtualCursor.setTextOffset(virtualCursor.startOffset + 1,
+                                  virtualCursor.endOffset + 1);
+    else if (direction == this.BACKWARD && virtualCursor.startOffset > 0)
+      virtualCursor.setTextOffset(virtualCursor.startOffset - 1,
+                                  virtualCursor.endOffset - 1);
     
-    if (textIface.getSoftSelection(startOffset, endOffset)) {
-      if (direction == this.FORWARD &&
-          endOffset.value <= textIface.characterCount)
-        textIface.setSoftSelection(startOffset.value + 1, endOffset.value + 1);
-      else if (direction == this.BACKWARD && startOffset.value > 0)
-        textIface.setSoftSelection(startOffset.value - 1, endOffset.value - 1);
-    } else {
-      textIface.setSoftSelection(0, 1);
-    }
+    console.log(console.accToString(rootAcc));
   },
-
+  
   navigate: function navigate (rootAcc, direction) {
+    console.log(console.accToString(rootAcc));
+    let virtualCursor = this.getVirtualCursor(rootAcc);
+    console.log(virtualCursor);
     let treeWalker = new AccessibleTreeWalker(rootAcc, SimpleFilter);
-    var docAcc = rootAcc.QueryInterface(Ci.nsIAccessibleDocument);
-    if (docAcc.softFocusPivotCount > 0) {
-      treeWalker.currentNode = docAcc.getSoftFocusAtPivot(0);
-      try {
-        let textIface =
-          treeWalker.currentNode.QueryInterface(Ci.nsIAccessibleText);
-        textIface.clearSoftSelection();
-      } catch (e) {
-      }
-    }
+    if (virtualCursor.accessible)
+      treeWalker.currentNode = virtualCursor.accessible;
 
     let newNode = (direction == this.FORWARD) ? treeWalker.next() :
       treeWalker.previous();
 
-    if (newNode)
-      newNode.takeSoftFocus(0);
+    if (newNode) {
+      console.log("Set accessible");
+      virtualCursor.setAccessible(newNode);
+    } else {
+      console.log('nope');
+    }
   }
 }
 

@@ -3,12 +3,33 @@ const Ci = Components.interfaces;
 const Cu = Components.utils;
 
 Cu.import("resource://softfocusdemo/content/Console.js");
+Cu.import("resource://gre/modules/XPCOMUtils.jsm");
 
 var EXPORTED_SYMBOLS = ["SoftFocusView"];
+
+function PivotObserver(aPivot, aSoftFocuRing) {
+  this.pivot = aPivot;
+  this.softFocusRing = aSoftFocuRing;
+}
+
+PivotObserver.prototype = {
+  onAccessibleChanged: function onAccessibleChanged (aOldAccessible,
+                                                     aNewAccessible) {
+    this.softFocusRing.show(this.pivot);
+  },
+
+  onTextOffsetChanged: function onTextOffsetChanged (aOldStart, aOldEnd,
+                                                     aNewStart, aNewEnd) {
+    this.softFocusRing.show(this.pivot);
+  },
+
+  QueryInterface: XPCOMUtils.generateQI([Ci.nsIAccessiblePivotObserver])
+}
 
 var SoftFocusView = {
   observerService : Cc["@mozilla.org/observer-service;1"]
     .getService(Ci.nsIObserverService),
+  pivotObservers: [],
 
   init: function init(xulDoc) {
     this.softFocusRing = new SoftFocusRing(xulDoc);
@@ -31,20 +52,14 @@ var SoftFocusView = {
   },
 
   handleEvent: function handleEvent(event) {
-    if (event.eventType == Ci.nsIAccessibleEvent.EVENT_SOFT_FOCUS_CHANGED) {
-      let softFocusEvent = event
-        .QueryInterface(Ci.nsIAccessibleSoftFocusChangeEvent);
-      
-      // Only interested in pivot 0
-      if (softFocusEvent.pivotIndex != 0)
-        return;
-      
-      if (softFocusEvent.isFocused)
-        this.softFocusRing.show(event.accessible);
-      else
-        this.softFocusRing.hide();
-    } else if (event.eventType == Ci.nsIAccessibleEvent.EVENT_SOFT_TEXT_SELECTION_CHANGED) {
-      this.softFocusRing.show(event.accessible);
+    console.log(event.eventType);
+    if (event.eventType == Ci.nsIAccessibleEvent.EVENT_DOCUMENT_LOAD_COMPLETE) {
+      let doc = event.accessible.QueryInterface(Ci.nsIAccessibleDocument);
+      let pivotObserver = new PivotObserver(doc.virtualCursor,
+                                            this.softFocusRing);
+      doc.virtualCursor.addObserver(pivotObserver);
+      this.pivotObservers.push(pivotObserver);
+      console.logObj(doc.virtualCursor);
     }
   }
 };
@@ -99,22 +114,19 @@ SoftFocusRing.prototype = {
     this._highlightRect.style.display = "block";
   },
 
-  _getSoftFocusRect: function _getSoftFocusRect(acc) {
+  _getSoftFocusRect: function _getSoftFocusRect(acc, startOffset, endOffset) {
     let ax = {}, ay = {}, aw = {}, ah = {};
-    
-    try {
-      let textAcc = acc.QueryInterface(Ci.nsIAccessibleText);
-      let start = {};
-      let end = {};
-      if (textAcc.getSoftSelection(start, end)) {
+
+    if (endOffset >= 0 && startOffset >= 0 && endOffset != startOffset) {
+      try {
+        let textAcc = acc.QueryInterface(Ci.nsIAccessibleText);
         textAcc.getRangeExtents(
-          start.value, end.value, ax, ay, aw, ah,
+          startOffset, endOffset, ax, ay, aw, ah,
           Ci.nsIAccessibleCoordinateType.COORDTYPE_SCREEN_RELATIVE);
         return {left: ax.value, top: ay.value,
                 right: ax.value + aw.value, bottom: ay.value + ah.value};
+      } catch (e) {
       }
-    }
-    catch (e) {
     }
 
     acc.getBounds(ax, ay, aw, ah);
@@ -122,15 +134,22 @@ SoftFocusRing.prototype = {
             right: ax.value + aw.value, bottom: ay.value + ah.value};
   },
 
-  show: function show(acc) {
+  show: function show(pivot) {
+    if (!pivot.accessible) {
+      this.hide();
+      return;
+    }
+
     let accRect = {};
 
     try {
       let self = this;
-      let accNode = acc.QueryInterface(Ci.nsIAccessNode);
+      let accNode = pivot.accessible.QueryInterface(Ci.nsIAccessNode);
       accNode.scrollTo(Ci.nsIAccessibleScrollType.SCROLL_TYPE_ANYWHERE);
       this.window.setTimeout(function () {
-        let rect = self._getSoftFocusRect(acc);
+        let rect = self._getSoftFocusRect(pivot.accessible,
+                                          pivot.startOffset,
+                                          pivot.endOffset);
         let dx = {}, dy = {}, dw = {}, dh = {};
         let docRoot = accNode.rootDocument.QueryInterface(Ci.nsIAccessible);
         docRoot.getBounds(dx, dy, dw, dh);

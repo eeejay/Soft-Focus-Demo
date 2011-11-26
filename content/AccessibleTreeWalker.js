@@ -2,6 +2,7 @@ const Cc = Components.classes;
 const Ci = Components.interfaces;
 const Cu = Components.utils;
 
+Cu.import("resource://gre/modules/XPCOMUtils.jsm");
 Cu.import("resource://softfocusdemo/content/Console.js");
 
 var EXPORTED_SYMBOLS = ["SimpleFilter", "AccessibleTreeWalker"];
